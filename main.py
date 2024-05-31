@@ -472,4 +472,4 @@ def check_db_backup():
 
 if __name__ == "__main__":
     check_db_backup()
-    app.run()
+    app.run("0.0.0.0", 5000)
