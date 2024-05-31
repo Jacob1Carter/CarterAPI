@@ -1,0 +1,46 @@
+<h1>Carter API</h1>
+<p>Author: Jacob Carter<br>Made on: 2024-04-10</p>
+<a href="/tables">Manage tables</a>
+<h2>Tables:</h2>
+{% for tablename, table_info in tables.items() %}
+    <h3 style='margin-bottom: 0px;'>Table: <a href="/table/{{ tablename }}">{{ tablename }}</a></h3>
+    <table>
+        <tr>
+            <th style='padding-right: 25px; text-align: left;'>Name:</th>
+            {% for row in table_info["rows"] %}
+                <th style='padding-right: 25px; text-align: left;'>{{ row[1] }}</th>
+            {% endfor %}
+        </tr>
+        <tr>
+            <td>Type:</td>
+            {% for row in table_info["rows"] %}
+                <td style='padding-right: 25px; text-align: left;'>{{ row[2] }}</td>
+            {% endfor %}
+        </tr>
+        <tr>
+            <td>Not Null:</td>
+            {% for row in table_info["rows"] %}
+                <td style='padding-right: 25px; text-align: left;'>{{ 'TRUE' if row[3] == 1 else 'FALSE' }}</td>
+            {% endfor %}
+        </tr>
+        <tr>
+            <td>Default:</td>
+            {% for row in table_info["rows"] %}
+                <td style='padding-right: 25px; text-align: left;'>{{ row[4] }}</td>
+            {% endfor %}
+        </tr>
+        <tr>
+            <td>Primary Key:</td>
+            {% for row in table_info["rows"] %}
+                <td style='padding-right: 25px; text-align: left;'>{{ 'TRUE' if row[5] == 1 else 'FALSE' }}</td>
+            {% endfor %}
+        </tr>
+    </table>
+    <small>Row count: {{ table_info["row_count"] }}</small>
+{% endfor %}
+<br>
+<br>
+<small>{% if hidden_count == 1 %} 1 private table has been hidden{% else %}{{ hidden_count }} private tables have been hidden{% endif %}</small>
+<br>
+<br>
+<small>Using sqlite3</small>

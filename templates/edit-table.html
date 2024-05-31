@@ -1,0 +1,35 @@
+<form method="POST" action="/table/{{ table }}">
+    <h1>Edit table: {{ table }}</h1>
+    <div class="form-group">
+        <label for="table-name">Table name:</label>
+        <input type="text" name="table-name" id="table-name" class="form-control" value="{{ table }}">
+    </div>
+    <div class="form-group">
+        <label for="row-count">Row count:</label>
+        <input type="number" name="row-count" id="row-count" class="form-control" value="{{ row_count }}">
+    </div>
+    <div class="form-group">
+        <label for="hidden">Hidden:</label>
+        <input type="checkbox" name="hidden" id="hidden" class="form-control" {% if hidden == 1 %}checked{% endif %}>
+    </div>
+    <div class="form-group">
+        <label for="rows">Rows:</label>
+        <div id="rows">
+            {% for row in rows %}
+                <div class="row">
+                    <input type="text" name="row-name" class="form-control" value="{{ row[1] }}">
+                    <select name="row-type" class="form-control">
+                        <option value="INTEGER" {% if row[2] == "INTEGER" %}selected{% endif %}>INTEGER</option>
+                        <option value="TEXT" {% if row[2] == "TEXT" %}selected{% endif %}>TEXT</option>
+                        <option value="REAL" {% if row[2] == "REAL" %}selected{% endif %}>REAL</option>
+                        <option value="BLOB" {% if row[2] == "BLOB" %}selected{% endif %}>BLOB</option>
+                    </select>
+                    <input type="checkbox" name="row-notnull" {% if row[3] == 1 %}checked{% endif %}>
+                    <input type="text" name="row-default" class="form-control" value="{{ row[4] }}">
+                    <input type="checkbox" name="row-primarykey" {% if row[5] == 1 %}checked{% endif %}>
+                    <button type="button" class="btn btn-danger" onclick="removeRow(this)">Remove</button>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</form>

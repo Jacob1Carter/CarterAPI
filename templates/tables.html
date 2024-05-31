@@ -1,0 +1,28 @@
+<h1>Tables:</h1>
+
+<form method="POST" action="/tables">
+    <a href="/tables/new">New table</a>
+    <ul style="display: flex; flex-direction: row; flex-wrap: wrap; max-width: 1700px; list-style-type: none;">
+        {% for table in all_tables %}
+            <li style="margin: 10px 20px 10px 10px;">
+                <a href="/table/{{ table }}">{{ table }}</a>
+                <br>
+                {% if all_tables[table] %}
+                    <button style="margin-top: 5px;" name="action" value="delt-{{ table }}" onclick="return confirmDelete('{{ table }}', 'delete')">Delete</button>
+                    <button style="margin-top: 5px;" name="action" value="drop-{{ table }}" onclick="return confirmDelete('{{ table }}', 'drop')">Drop</button>
+                    <button style="margin-top: 5px; text-decoration: line-through;" name="action" value="edit-{{ table }}" disabled>Edit</button>
+                {% else %}
+                    <small>This table is protected</small>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+</form>
+
+<script>
+function confirmDelete(table, action) {
+    return confirm(`Are you sure you want to ${action} the table "${table}"?\n\nThis action CANNOT be undone`);
+}
+</script>
+
+<a href="/">return</a>

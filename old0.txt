@@ -1,0 +1,409 @@
+
+from flask import Flask, request
+import sqlite3
+
+API_KEY = "i0l765RJ30f9HR47L072c2tc74V1597h"
+
+PRIVATE_TABLES = []
+
+conn = sqlite3.connect('database.db')
+
+cur = conn.cursor()
+
+
+def find_word_index(string, word):
+  words = string.split()
+  for word_i in words:
+    if word_i.upper() == word:
+      return string.index(word_i[0])
+
+  return False
+
+
+def split_values(values):
+    print()
+    print(values)
+    values_list = []
+    protected = False
+    pre = 0
+    for i, c in enumerate(values):
+        print()
+        print(i, ": ", c, " protected: ", protected)
+        if i+1 < len(values):
+            if c == ",":
+                if i+1 < len(values):
+                    if values[i+1] == " ":
+                        if not protected:
+                            print(f"|{values[pre:i]}|")
+                            values_list.append(values[pre:i])
+                            if i+2 < len(values):
+                                pre = i+2
+                            else:
+                                pre = i
+        if c in ["(", "{", "["] and not protected:
+            protected = c
+        elif protected == "(" and c == ")":
+            protected = False
+        elif protected == "{" and c == "}":
+            protected = False
+        elif protected == "[" and c == "]":
+            protected = False
+
+        if i+1 == len(values):
+            print("last child, protected: ", protected)
+            if not protected:
+                print(f"|{values[pre:]}|")
+                values_list.append(values[pre:])
+
+    print(values_list)
+    return values_list
+
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+
+    tables_info = []
+
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [row[0] for row in cur.fetchall()]
+
+    hidden_tables = 0
+
+    for table in tables:
+        if table in PRIVATE_TABLES:
+            hidden_tables += 1
+        else:
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            row_count = cur.fetchone()[0]
+
+            cur.execute(f"PRAGMA table_info({table})")
+            rows = cur.fetchall()
+
+            table_info_row1 = "<tr><th style='min-width: 180px; text-align: left;'>Name:</th>"
+            for row in rows:
+                table_info_row1 += f"<th style='min-width: 180px; text-align: left;'>{row[1]}</th>"
+            table_info_row1 += "</tr>"
+
+            table_info_row2 = "<tr><td>Type:</td>"
+            for row in rows:
+                table_info_row2 += f"<td>{row[2]}</td>"
+            table_info_row2 += "</tr>"
+
+            table_info_row3 = "<tr><td>Not Null:</td>"
+            for row in rows:
+                table_info_row3 += f"<td>{'TRUE' if row[3] == 1 else 'FALSE'}</td>"
+            table_info_row3 += "</tr>"
+
+            table_info_row4 = "<tr><td>Default:</td>"
+            for row in rows:
+                table_info_row4 += f"<td>{row[4]}</td>"
+            table_info_row4 += "</tr>"
+
+            table_info_row5 = "<tr><td>Primary Key:</td>"
+            for row in rows:
+                table_info_row5 += f"<td>{'TRUE' if row[5] == 1 else 'FALSE'}</td>"
+            table_info_row5 += "</tr>"
+
+            table_info = f"<h3 style='margin-bottom: 0px;'>Table: {table}</h3><table>{table_info_row1}{table_info_row2}{table_info_row3}{table_info_row4}{table_info_row5}</table><small>Row count: {row_count}</small>"
+
+            tables_info.append(table_info)
+
+    tables_html = ""
+
+    for table in tables_info:
+        tables_html += f"{table}<br>"
+
+    response = f"""
+<h1>Carter API</h1>
+<p>Author: Jacob Carter<br>Made on: 2024-04-10</p>
+<h2>Methods:</h2>
+<h3><a href='/post'>/post</a></h3>
+SQL INSERT QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style="padding-left: 30px;">
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name
+<br>columns: required, names of columns for values to be added to (comma & space seperated)
+<br>values: required, values to be inserted, in matching order to columns (comma & space seperated)
+</div>
+<br><h3><a href='/get'>/get</a></h3>
+SQL SELECT QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style="padding-left: 30px;">
+<br>key: required, 32 character api key<br>
+<br>selection: required, standard SQL selection, including * (comma & space seperated)
+<br>table: required, sql table name
+<br>conditions: optional, sql conditions like WHERE and LIKE
+</div>
+<br><h3><a href='/update'>/update</a></h3>
+SQL UPDATE QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name
+<br>columns:
+<br>values:
+<br>conditions: optional, sql conditions like WHERE and LIKE<br>
+</div>
+<br><h3><a href='/create'>/create</a></h3>
+SQL CREATE QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name
+<br>columns: required, standard SQL syntax for column names and rules (type, not null, default and primary key) (comma & space seperated)<br>
+</div>
+<br><h2>Tables:</h2>{tables_html}
+<br><small>{hidden_tables} private table(s) have been hidden</small>
+<br><br><small>Using sqlite3</small>
+"""
+    return response
+
+
+@app.route("/post", methods=["GET"])
+def post():
+    key = request.args.get("key")
+    if key:
+        if key == API_KEY:
+            table = request.args.get("table")
+            columns = request.args.get("columns")
+            values = request.args.get("values")
+            if table and table != "" and columns and columns != "" and values and values != "":
+                column_count = len(columns.split(", "))
+                values_placeholder = "?"
+                if column_count > 1:
+                    for i in range(1, column_count):
+                        values_placeholder += ", ?"
+
+                query = f"INSERT INTO {table} ({columns}) VALUES ({values_placeholder})"
+                values_list = split_values(values)
+                print(values_list)
+                for i, value in enumerate(values_list):
+                    if value == "{ip}":
+                        values_list[i] = str(request.remote_addr)
+                    elif value == "{agent}":
+                        values_list[i] = str(request.user_agent)
+                    else:
+                        values_list[i] = str(value)
+                values_parsed = tuple(values_list)
+                cur.execute(query, values_parsed)
+                conn.commit()
+                return {"action": "Successful", "data": f"Value(s) ({values}) added to '{table}' table."}
+            else:
+                return {"action": "Failed", "data": "'table', 'columns' and 'values' are required arguments"}
+        else:
+            return {"action": "Failed", "data": "Access denied: invalid api key"}
+    else:
+        return """
+SQL INSERT QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name<br>columns: required, names of columns for values to be added to (comma & space seperated)
+<br>values: required, values to be inserted, in matching order to columns (comma & space seperated)<br>
+</div>
+<br><small>Using sqlite3</small>
+"""
+
+
+@app.route("/get", methods=["GET"])
+def get():
+    key = request.args.get("key")
+    if key:
+        if key == API_KEY:
+            selection = request.args.get("selection")
+            table = request.args.get("table")
+            conditions = request.args.get("conditions")
+            variables = request.args.get("variables")
+
+            if selection and selection != "" and table and table != "":
+                query = f"SELECT {selection} FROM {table} {conditions}"
+                cur.execute(query, tuple(split_values(variables)))
+                result = cur.fetchall()
+
+                response = []
+
+                if selection == "*":
+                    cur.execute(f"PRAGMA table_info({table})")
+                    rows = cur.fetchall()
+                    column_names = [row[1] for row in rows]
+                else:
+                    column_names = selection.split(", ")
+                for data in result:
+                    row = {}
+                    for i, column in enumerate(data):
+                        if column[0] == "[" and column[-1] == "]":
+                            column_parsed = split_values(column[1:-1])
+                        else:
+                            column_parsed = column
+                        row.update({column_names[data.index(column)]: column_parsed})
+                    response.append(row)
+                return {"action": "Successful", "data": response}
+            return {"action": "Failed", "data": "'selection' and 'table' are required arguments"}
+        else:
+            return {"action": "Failed", "data": "Access denied: invalid api key"}
+    else:
+        return """
+SQL SELECT QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>selection: required, standard SQL selection, including * (comma & space seperated)
+<br>table: required, sql table name
+<br>conditions: optional, sql conditions like WHERE and LIKE<br>
+</div>
+<br><small>Using sqlite3</small>
+"""
+
+
+@app.route("/update", methods=["GET"])
+def update():
+    key = request.args.get("key")
+    if key:
+        if key == API_KEY:
+            table = request.args.get("table")
+            columns = request.args.get("columns")
+            values = request.args.get("values")
+            conditions = request.args.get("conditions")
+            if table and table != "" and columns and columns != "" and values and values != "":
+                columns_list = columns.split(", ")
+                values_list = values.split(", ")
+
+                update_data = ""
+                if len(columns_list) == len(values_list):
+                    for i, val in enumerate(columns_list):
+                        update_data += f"{val} = '{values_list[i]}'"
+                    query = f"UPDATE {table} SET {update_data} {conditions}"
+                    cur.execute(query)
+                    conn.commit()
+                    return {"action": "Successful", "data": f"'{columns}' set to '{values}' in {table} table"}
+                else:
+                    return {"action": "Failed", "data": "'columns' and 'values' arguments did not match"}
+        else:
+            return {"action": "Failed", "data": "Access denied: invalid api key"}
+    else:
+        return """
+SQL UPDATE QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name
+<br>columns:
+<br>values:
+<br>conditions: optional, sql conditions like WHERE and LIKE<br>
+</div>
+<br><small>Using sqlite3</small>
+"""
+
+
+@app.route("/create", methods=["GET"])
+def create():
+    key = request.args.get("key")
+    if key:
+        if key == API_KEY:
+            table = request.args.get("table")
+            columns = request.args.get("columns")
+            if table and table != "" and columns and columns != "":
+                try:
+                    cur.execute(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{table}'")
+                    existing_check = cur.fetchone()
+
+                    if not existing_check:
+                        cur.execute(f"CREATE TABLE IF NOT EXISTS {table} ({columns})")
+
+                        cur.execute("INSERT INTO tables_register (name, created_from_ip, created_from_agent) VALUES (?, ?, ?)", (table, str(request.remote_addr), str(request.user_agent)))
+                        conn.commit()
+                        return {"action": "Successful", "data": f"Table '{table}' added to database"}
+                    else:
+                        return {"action": "Failed", "data": f"Table '{table}' already exists"}
+                except:
+                    return {"action": "Failed", "data": "Syntax error"}
+            else:
+                return {"action": "Failed", "data": "'table' and 'columns' are required arguments"}
+        else:
+            return {"action": "Failed", "data": "Access denied: invalid api key"}
+    else:
+        return """
+SQL CREATE QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name
+<br>columns: required, standard SQL syntax for column names and rules (type, not null, default and primary key) (comma & space seperated)<br>
+</div>
+<br><small>Using sqlite3</small>
+"""
+
+
+@app.route("/drop", methods=["GET"])
+def drop():
+    key = request.args.get("key")
+    if key:
+        if key == API_KEY:
+            table = request.args.get("table")
+            if table and table != "":
+                try:
+                    cur.execute(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{table}'")
+                    existing_check = cur.fetchone()
+
+                    if existing_check:
+                        cur.execute("DELETE FROM tables_register WHERE name = ?", (table,))
+
+                        cur.execute(f"DROP TABLE IF EXISTS {table}")
+                        conn.commit()
+                        return {"action": "Successful", "data": f"Table '{table}' deleted"}
+                    else:
+                        return {"action": "Failed", "data": f"Table '{table}' does not exist"}
+                except:
+                    return {"action": "Failed", "data": "Syntax error"}
+            else:
+                return {"action": "Failed", "data": "'table' is a required arguments"}
+        else:
+            return {"action": "Failed", "data": "Access denied: invalid api key"}
+    else:
+        return """
+SQL DROP QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name<br>
+</div>
+<br><small>Using sqlite3</small>
+"""
+
+
+@app.route("/truncate", methods=["GET"])
+def truncate():
+    key = request.args.get("key")
+    if key:
+        if key == API_KEY:
+            table = request.args.get("table")
+            if table and table != "":
+                try:
+                    cur.execute(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{table}'")
+                    existing_check = cur.fetchone()
+
+                    if existing_check is not None:
+                        cur.execute(f"DELETE FROM {table}")
+                        conn.commit()
+                        return {"action": "Successful", "data": f"Table '{table}' reset"}
+                    else:
+                        return {"action": "Failed", "data": f"Table '{table}' does not exist"}
+                except:
+                    return {"action": "Failed", "data": "Syntax error"}
+            else:
+                return {"action": "Failed", "data": "'table' is a required arguments"}
+        else:
+            return {"action": "Failed", "data": "Access denied: invalid api key"}
+    else:
+        return """
+SQL DROP QUERIES ONLY<br>
+<br>Arguements:<br>
+<div style='padding-left: 30px;'>
+<br>key: required, 32 character api key<br>
+<br>table: required, sql table name<br>
+</div>
+<br><small>Using sqlite3</small>
+"""

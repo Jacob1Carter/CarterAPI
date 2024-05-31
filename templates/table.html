@@ -1,0 +1,37 @@
+<form method="POST" action="/table/{{ table }}">
+    <span>
+        SELECT
+        <input type="text" name="selection" value="{{ selection }}">
+        FROM
+        <select name="table" value="{{ table }}">
+            {% for tablename in all_tables %}
+                <option value="{{ tablename }}" {% if tablename == table %}selected{% endif %}><a href="/table/{{ tablename }}">{{ tablename }}</a></option>
+            {% endfor %}
+        </select>
+        <input type="text" name="other" value="{{ other }}">
+        <button type="submit">Submit</button>
+    </span>
+</form>
+
+{% if message != "" %}
+{{ message }}
+{% endif %}
+
+{% if show %}
+<table>
+    <tr>
+        {% for column_name in column_names %}
+            <th style='white-space: nowrap; border: 1px solid #000; max-width: 350px; overflow: auto; padding-right: 25px; text-align: left;'>{{ column_name }}</th>
+        {% endfor %}
+    </tr>
+    {% for row in data %}
+        <tr>
+            {% for value in row %}
+                <td style='white-space: nowrap; border: 1px solid #aaa; max-width: 350px; overflow: auto; padding-right: 25px; text-align: left;'>{{ value }}</td>
+            {% endfor %}
+        </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+<a href="/">return</a>

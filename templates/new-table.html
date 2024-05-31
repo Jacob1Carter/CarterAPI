@@ -1,0 +1,85 @@
+<h1>New table</h1>
+
+<form method="POST" action="/tables/new" id="form">
+    <div class="form-group">
+        <label for="table-name">Table name:</label>
+        <input type="text" name="table-name" id="table-name" class="form-control" placeholder="Table name" required>
+    </div>
+    <div class="form-group">
+        <label for="columns">Columns:</label>
+        <div id="columns">
+            <div id="0" class="column" style="margin-left: 20px;">
+                <label for="column-name">Column Name:</label>
+                <input id="column-name" type="text" name="column-name-0" class="form-control" placeholder="Row name" value="id" required>
+                <label for="column-type">Column Type:</label>
+                <select id="column-type" name="column-type-0" class="form-control" required>
+                    <option value="" disabled>Select an option</option>
+                    <option selected value="INTEGER">INTEGER</option>
+                    <option value="TEXT">TEXT</option>
+                    <option value="REAL">REAL</option>
+                    <option value="BLOB">BLOB</option>
+                </select>
+                <label for="column-notnull">Not Null:</label>
+                <input id="column-notnull" type="checkbox" name="column-notnull-0">
+                <label for="column-default">Default:</label>
+                <input id="column-default" type="text" name="column-default-0" class="form-control" placeholder="Default value">
+                <label for="column-other">Other:</label>
+                <input id="column-other" type="text" name="column-other-0" class="form-control">
+                <label for="column-pk">Primary Key:</label>
+                <input id="column-pk" type="checkbox" name="column-pk-0" checked>
+                <button type="button" class="btn btn-danger" onclick="removeColumn(this)">Remove</button>
+            </div>
+        </div>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="addColumn()">Add column</button>
+    <div class="form-group">
+        <label for="hidden">Hidden:</label>
+        <input type="checkbox" name="hidden" id="hidden" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">Create table</button>
+</form>
+<script>
+    function addColumn() {
+        let container = document.getElementById("columns");
+        let highestId = 0;
+        for (let i = 0; i < container.children.length; i++) {
+            let id = parseInt(container.children[i].id.slice(-1));
+            if (id > highestId) {
+                highestId = id;
+            }
+        }
+        let selfId = (highestId + 1).toString();
+
+        let column = document.createElement("div");
+        column.id = selfId;
+        column.className = "column";
+        column.style.marginLeft = "20px";
+        column.innerHTML = `
+            <label for="column-name">Column Name:</label>
+            <input id="column-name" type="text" name="column-name-${selfId}" class="form-control" placeholder="Row name" required>
+            <label for="column-type">Column Type:</label>
+            <select id="column-type" name="column-type-${selfId}" class="form-control" required>
+                <option value="" selected disabled>Select an option</option>
+                <option value="INTEGER">INTEGER</option>
+                <option value="TEXT">TEXT</option>
+                <option value="REAL">REAL</option>
+                <option value="BLOB">BLOB</option>
+            </select>
+            <label for="column-notnull">Not Null:</label>
+            <input id="column-notnull" type="checkbox" name="column-notnull-${selfId}">
+            <label for="column-default">Default:</label>
+            <input id="column-default" type="text" name="column-default-${selfId}" class="form-control" placeholder="Default value">
+            <label for="column-other">Other:</label>
+            <input id="column-other" type="text" name="column-other-${selfId}" class="form-control">
+            <label for="column-pk">Primary Key:</label>
+            <input id="column-pk" type="checkbox" name="column-pk-${selfId}">
+            <button type="button" class="btn btn-danger" onclick="removeColumn(this)">Remove</button>
+        `;
+        container.appendChild(column);
+    }
+
+    function removeColumn(button) {
+        button.parentElement.remove();
+    }
+
+</script>
