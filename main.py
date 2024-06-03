@@ -471,5 +471,4 @@ def check_db_backup():
 
 
 if __name__ == "__main__":
-    check_db_backup()
-    app.run("0.0.0.0", 5000)
+    app.run(host='127.0.0.1', port=5000)
