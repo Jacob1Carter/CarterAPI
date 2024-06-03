@@ -209,6 +209,22 @@ def table(tablename):
     return render_template("table.html", show=show, selection=selection, table=table, other=other, column_names=column_names, data=data, all_tables=all_tables, message=message)
 
 
+@app.route("/query", methods=["GET", "POST"])
+def query():
+    message = ""
+    data = ""
+
+    if request.method == "POST":
+        user_query = request.form.get("query")
+        try:
+            cur.execute(user_query)
+            data = cur.fetchall()
+        except sqlite3.Error as e:
+            message = f"Error: {str(e)}"
+
+    return render_template("query.html", message=message, data=data)
+
+
 @app.route("/post/reset/database")
 def reset_database():
     try:
@@ -284,13 +300,13 @@ def create_portfolio():
     if not data:
         return jsonify({"result": "failed", "error": "No data provided"}), 400
 
-    required_fields = ["pagename", "title", "bio", "links", "banners", "segments", "icon", "favicon"]
+    required_fields = ["pagename", "title", "bio", "links", "banners", "segments", "icon", "favicon", "colours"]
 
     for field in required_fields:
         if field not in data:
             return jsonify({"result": "failed", "error": f"{field} value not given"}), 400
 
-    query = "INSERT INTO portfolio (pagename, title, bio, links, banners, segments, icon, favicon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    query = "INSERT INTO portfolio (pagename, title, bio, links, banners, segments, icon, favicon, colours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     values = (
         data["pagename"],
         data["title"],
@@ -299,7 +315,8 @@ def create_portfolio():
         json.dumps(data["banners"]),
         json.dumps(data["segments"]),
         data["icon"],
-        data["favicon"]
+        data["favicon"],
+        json.dumps(data["colours"])
     )
 
     try:
@@ -324,7 +341,8 @@ def get_portfolio():
         "banners": {},
         "segments": [],
         "icon": "",
-        "favicon": ""
+        "favicon": "",
+        "colours": {}
     }
 
     # Retrieve 'id' from the request JSON body or headers
@@ -341,11 +359,11 @@ def get_portfolio():
         if id:
             if str(id).isdigit():
                 id = int(id)
-                query = f"SELECT pagename, title, bio, links, banners, segments, icon, favicon FROM portfolio WHERE id = {id}"
+                query = f"SELECT pagename, title, bio, links, banners, segments, icon, favicon, colours FROM portfolio WHERE id = {id}"
             else:
                 return jsonify({"result": "failed", "error": "invalid type for id"}), 500
         else:
-            query = "SELECT pagename, title, bio, links, banners, segments, icon, favicon FROM portfolio ORDER BY date_added DESC"
+            query = "SELECT pagename, title, bio, links, banners, segments, icon, favicon, colours FROM portfolio ORDER BY date_added DESC"
     except Exception as e:
         return str(e)
 

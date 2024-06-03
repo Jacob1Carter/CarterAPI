@@ -21,13 +21,13 @@
 <table>
     <tr>
         {% for column_name in column_names %}
-            <th style='white-space: nowrap; border: 1px solid #000; max-width: 350px; overflow: auto; padding-right: 25px; text-align: left;'>{{ column_name }}</th>
+            <th style='white-space: nowrap; border: 1px solid #000; max-width: 250px; overflow: auto; padding-right: 25px; text-align: left;'>{{ column_name }}</th>
         {% endfor %}
     </tr>
     {% for row in data %}
         <tr>
             {% for value in row %}
-                <td style='white-space: nowrap; border: 1px solid #aaa; max-width: 350px; overflow: auto; padding-right: 25px; text-align: left;'>{{ value }}</td>
+                <td style='white-space: nowrap; border: 1px solid #aaa; max-width: 250px; overflow: auto; padding-right: 25px; text-align: left; font-size: small;'>{{ value }}</td>
             {% endfor %}
         </tr>
     {% endfor %}
