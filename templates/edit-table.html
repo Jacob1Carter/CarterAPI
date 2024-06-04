@@ -1,35 +1,100 @@
-<form method="POST" action="/table/{{ table }}">
-    <h1>Edit table: {{ table }}</h1>
+
+{% if error != "" %}
+    <p>{{ error }}</p>
+{% endif %}
+
+<form method="POST" action="/tables/edit/{{ tablename }}">
+    <h1>Edit '{{ tablename }}' table:</h1>
+    <a href="/table/{{ tablename }}">View table</a>
     <div class="form-group">
         <label for="table-name">Table name:</label>
-        <input type="text" name="table-name" id="table-name" class="form-control" value="{{ table }}">
+        <input type="text" name="table-name" id="table-name" value="{{ tablename }}">
     </div>
     <div class="form-group">
-        <label for="row-count">Row count:</label>
-        <input type="number" name="row-count" id="row-count" class="form-control" value="{{ row_count }}">
-    </div>
-    <div class="form-group">
-        <label for="hidden">Hidden:</label>
-        <input type="checkbox" name="hidden" id="hidden" class="form-control" {% if hidden == 1 %}checked{% endif %}>
-    </div>
-    <div class="form-group">
-        <label for="rows">Rows:</label>
-        <div id="rows">
-            {% for row in rows %}
-                <div class="row">
-                    <input type="text" name="row-name" class="form-control" value="{{ row[1] }}">
-                    <select name="row-type" class="form-control">
-                        <option value="INTEGER" {% if row[2] == "INTEGER" %}selected{% endif %}>INTEGER</option>
-                        <option value="TEXT" {% if row[2] == "TEXT" %}selected{% endif %}>TEXT</option>
-                        <option value="REAL" {% if row[2] == "REAL" %}selected{% endif %}>REAL</option>
-                        <option value="BLOB" {% if row[2] == "BLOB" %}selected{% endif %}>BLOB</option>
+        <label for="columns">Columns:</label>
+        <div id="columns">
+            {% for column in columns %}
+                <div id="{{ loop.index - 1 }}" class="column" style="margin-left: 20px;">
+                    <label for="column-name">Column Name:</label>
+                    <input id="column-name" type="text" name="column-name-{{ loop.index - 1 }}" class="form-control" placeholder="Row name" {% if column[1] != None %}value="{{ column[1] }}"{% endif %} required>
+                    <input style="display: none" type="text" name="column-old-name-{{ loop.index - 1 }}" class="form-control" value="{% if column[1] != None %}{{ column[1] }}{% endif %}">
+                    <label for="column-type">Column Type:</label>
+                    <select id="column-type" name="column-type-{{ loop.index - 1 }}" class="form-control" required>
+                        <option value="" disabled>Select an option</option>
+                        <option value="INTEGER"{% if column[2] == "INTEGER" %} selected{% endif %}>INTEGER</option>
+                        <option value="TEXT"{% if column[2] == "TEXT" %} selected{% endif %}>TEXT</option>
+                        <option value="REAL"{% if column[2] == "REAL" %} selected{% endif %}>REAL</option>
+                        <option value="BLOB"{% if column[2] == "BLOB" %} selected{% endif %}>BLOB</option>
+                        <option value="TIMESTAMP"{% if column[2] == "TIMESTAMP" %} selected{% endif %}>TIMESTAMP</option>
                     </select>
-                    <input type="checkbox" name="row-notnull" {% if row[3] == 1 %}checked{% endif %}>
-                    <input type="text" name="row-default" class="form-control" value="{{ row[4] }}">
-                    <input type="checkbox" name="row-primarykey" {% if row[5] == 1 %}checked{% endif %}>
-                    <button type="button" class="btn btn-danger" onclick="removeRow(this)">Remove</button>
+                    <label for="column-notnull">Not Null:</label>
+                    <input id="column-notnull" type="checkbox" name="column-notnull-{{ loop.index - 1 }}"{% if column[3] != None %}{% if column[3] == 1 %} checked{% endif %}{% endif %}>
+                    <label for="column-default">Default:</label>
+                    <input id="column-default" type="text" name="column-default-{{ loop.index - 1 }}" class="form-control" placeholder="Default value" {% if column[4] != None %}value="{{ column[4] }}"{% endif %}>
+                    <label for="column-other">Other:</label>
+                    <input id="column-other" type="text" name="column-other-{{ loop.index - 1 }}" class="form-control"{% if column[6] is defined %}{% if column[6] != None %} value="{{ column[6] }}"{% endif %}{% endif %}>
+                    <label for="column-pk">Primary Key:</label>
+                    <input id="column-pk" type="checkbox" name="column-pk-{{ loop.index - 1 }}"{% if column[5] != None %}{% if column[5] == 1 %} checked{% endif %}{% endif %}>
+                    <button type="button" class="btn btn-danger" onclick="removeColumn(this)">Remove</button>
                 </div>
             {% endfor %}
         </div>
+        <button type="button" class="btn btn-primary" onclick="addColumn()">Add column</button>
     </div>
+    <div class="form-group">
+        <label for="hidden">Hidden:</label>
+        <input type="checkbox" name="hidden" id="hidden" class="form-control"{% if hidden %} checked{% endif %}>
+    </div>
+    <button type="submit" class="btn btn-primary">Rebuild table</button>
 </form>
+<script>
+    function addColumn() {
+        let container = document.getElementById("columns");
+        let highestId = 0;
+        for (let i = 0; i < container.children.length; i++) {
+            let id = parseInt(container.children[i].id.slice(-1));
+            if (id > highestId) {
+                highestId = id;
+            }
+        }
+        let selfId = (highestId + 1).toString();
+
+        let column = document.createElement("div");
+        column.id = selfId;
+        column.className = "column";
+        column.style.marginLeft = "20px";
+        column.innerHTML = `
+            <label for="column-name">Column Name:</label>
+            <input id="column-name" type="text" name="column-name-${selfId}" class="form-control" placeholder="Row name" required>
+            <input style="display: none" type="text" name="column-old-name-${selfId}" class="form-control" value="">
+            <label for="column-type">Column Type:</label>
+            <select id="column-type" name="column-type-${selfId}" class="form-control" required>
+                <option value="" selected disabled>Select an option</option>
+                <option value="INTEGER">INTEGER</option>
+                <option value="TEXT">TEXT</option>
+                <option value="REAL">REAL</option>
+                <option value="BLOB">BLOB</option>
+            </select>
+            <label for="column-notnull">Not Null:</label>
+            <input id="column-notnull" type="checkbox" name="column-notnull-${selfId}">
+            <label for="column-default">Default:</label>
+            <input id="column-default" type="text" name="column-default-${selfId}" class="form-control" placeholder="Default value">
+            <label for="column-other">Other:</label>
+            <input id="column-other" type="text" name="column-other-${selfId}" class="form-control">
+            <label for="column-pk">Primary Key:</label>
+            <input id="column-pk" type="checkbox" name="column-pk-${selfId}">
+            <button type="button" class="btn btn-danger" onclick="removeColumn(this)">Remove</button>
+        `;
+        container.appendChild(column);
+    }
+
+    function removeColumn(button) {
+        button.parentElement.remove();
+    }
+
+</script>
+<strong>Warning: </strong>This action will rebuild the table, if the table is large, this will take a long time.
+<br>
+<small>This table has {{ rowcount }} rows</small>
+<br><br>
+<a href="/">return</a>

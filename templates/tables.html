@@ -1,5 +1,9 @@
 <h1>Tables:</h1>
 
+{% if error != "" %}
+    <p>{{ error }}</p>
+{% endif %}
+
 <form method="POST" action="/tables">
     <a href="/tables/new">New table</a>
     <ul style="display: flex; flex-direction: row; flex-wrap: wrap; max-width: 1700px; list-style-type: none;">
@@ -10,7 +14,7 @@
                 {% if all_tables[table] %}
                     <button style="margin-top: 5px;" name="action" value="delt-{{ table }}" onclick="return confirmDelete('{{ table }}', 'delete')">Delete</button>
                     <button style="margin-top: 5px;" name="action" value="drop-{{ table }}" onclick="return confirmDelete('{{ table }}', 'drop')">Drop</button>
-                    <button style="margin-top: 5px; text-decoration: line-through;" name="action" value="edit-{{ table }}" disabled>Edit</button>
+                    <button style="margin-top: 5px;" name="action" value="edit-{{ table }}">Edit</button>
                 {% else %}
                     <small>This table is protected</small>
                 {% endif %}

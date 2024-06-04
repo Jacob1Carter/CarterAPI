@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, render_template, redirect
 import sqlite3
 from datetime import datetime
@@ -29,7 +28,12 @@ def index():
     for tablename in all_tables_list:
         # Step 3: Check if we can access 'tables_register' and its content
         cur.execute("SELECT hidden FROM tables_register WHERE name = ?", (tablename,))
-        hidden = cur.fetchone()[0] == 1
+        result = cur.fetchone()
+
+        if result is None:
+            hidden = False
+        else:
+            hidden = result[0] == 1
 
         if hidden:
             hidden_count += 1
@@ -51,7 +55,7 @@ def index():
 
 
 @app.route("/tables", methods=["GET", "POST"])
-def tables():
+def view_tables():
     error = ""
 
     if request.method == "POST":
@@ -59,6 +63,7 @@ def tables():
         try:
             if action == "delt":
                 cur.execute(f"DROP TABLE {tablename}")
+                cur.execute(f"DELETE FROM tables_register WHERE name = '{tablename}'")
             elif action == "drop":
                 cur.execute(f"DELETE FROM {tablename}")
             elif action == "edit":
@@ -82,7 +87,7 @@ def tables():
         else:
             all_tables.update({tablename: True})
 
-    return render_template("tables.html", all_tables=all_tables)
+    return render_template("tables.html", all_tables=all_tables, error=error)
 
 
 @app.route("/tables/new", methods=["GET", "POST"])
@@ -125,7 +130,7 @@ def new_table():
                 else:
                     col_pk = ""
 
-                cols_str += f"{col_name} {col_type}{col_not_null}{col_default}{col_other}{col_pk}, "
+                cols_str += f"{col_name} {col_type}{col_not_null}{col_default}{col_pk}{col_other}, "
 
         if len(cols_str) > 2:
             cols_str = cols_str[:-2]
@@ -136,12 +141,17 @@ def new_table():
             conn.commit()
         except sqlite3.Error as e:
             error = f"sqlite3.Error: {str(e)}"
+            print(f"Error: {error}")
         else:
             try:
                 cur.execute("INSERT INTO tables_register (name, created_from_ip, created_from_agent, hidden) VALUES (?, ?, ?, ?)", (tablename, str(request.remote_addr), str(request.user_agent), hidden))
                 conn.commit()
+                print(f"Table {tablename} created successfully")
             except sqlite3.Error as e:
                 error = f"sqlite3.Error: {str(e)}"
+                print(f"Error: {error}")
+
+        return redirect("/tables")
 
     return render_template("new-table.html", error=error)
 
@@ -149,27 +159,164 @@ def new_table():
 @app.route("/tables/edit/<tablename>", methods=["GET", "POST"])
 def edit_table(tablename):
     if request.method == "POST":
-        action, column = request.form.get("action").split("-")
-        try:
-            if action == "delt":
-                cur.execute(f"ALTER TABLE {tablename} DROP COLUMN {column}")
-            elif action == "drop":
-                cur.execute(f"DELETE FROM {tablename}")
-            elif action == "edit":
-                return redirect(f"/table/edit/{tablename}/{column}")
+        new_tablename = request.form.get("table-name")
+        hidden = 1 if request.form.get("hidden") else 0
 
-            conn.commit()
+        cols_str = ""
+
+        names_replace = {}
+
+        for key in request.form:
+            if key.startswith("column-name"):
+                column_id = key.split("-")[2]
+
+                col_name = request.form.get(f"column-name-{column_id}")
+                col_old_name = request.form.get(f"column-old-name-{column_id}")
+                col_type = request.form.get(f"column-type-{column_id}")
+                col_not_null = request.form.get(f"column-notnull-{column_id}")
+                col_default = request.form.get(f"column-default-{column_id}")
+                col_other = request.form.get(f"column-other-{column_id}")
+                col_pk = request.form.get(f"column-pk-{column_id}")
+
+                if col_old_name == "":
+                    col_old_name = col_name
+                else:
+                    names_replace.update({col_old_name: col_name})
+
+                if col_not_null:
+                    col_not_null = " NOT NULL"
+                else:
+                    col_not_null = ""
+
+                if col_default:
+                    col_default = f" DEFAULT {col_default}"
+                else:
+                    col_default = ""
+
+                if col_other:
+                    col_other = f" {col_other}"
+                else:
+                    col_other = ""
+
+                if col_pk:
+                    col_pk = " PRIMARY KEY"
+                else:
+                    col_pk = ""
+
+                cols_str += f"{col_old_name} {col_type}{col_not_null}{col_default}{col_pk}{col_other}, "
+
+        if len(cols_str) > 2:
+            cols_str = cols_str[:-2]
+
+        # Create the new table
+        query = f"CREATE TABLE {new_tablename}_rebuild ({cols_str})"
+        try:
+            print(query)
+            cur.execute(query)
         except sqlite3.Error as e:
             error = f"sqlite3.Error: {str(e)}"
+            print(f"Error: {error}")
+        else:
+            print(f"Created table {new_tablename}_rebuild")
+
+        # Get the column names and types of the new table
+        cur.execute(f"PRAGMA table_info({new_tablename}_rebuild)")
+        new_columns_info = cur.fetchall()
+        new_columns = [info[1] for info in new_columns_info]
+
+        # Get the column names and types of the old table
+        cur.execute(f"PRAGMA table_info({tablename})")
+        old_columns_info = cur.fetchall()
+
+        # Filter out the columns that exist in the old table and have a compatible data type
+        compatible_columns = []
+        for old_info in old_columns_info:
+            for new_info in new_columns_info:
+                if old_info[1] == new_info[1] and old_info[2] == new_info[2]:
+                    compatible_columns.append(old_info[1])
+
+        # Construct a SELECT statement that selects only these columns from the old table
+        if compatible_columns:
+            # Exclude 'id' from the select_columns
+            select_columns = ', '.join([col for col in compatible_columns if col != 'id'])
+
+            # Use this SELECT statement in an INSERT INTO ... SELECT statement to insert data into the new table
+            insert_statement = f"INSERT INTO {new_tablename}_rebuild ({select_columns}) SELECT {select_columns} FROM {tablename}"
+            print(insert_statement)
+            cur.execute(insert_statement)
+
+        # rename the columns of the new table
+        for old_name, new_name in names_replace.items():
+            cur.execute(f"ALTER TABLE {new_tablename}_rebuild RENAME COLUMN {old_name} TO {new_name}")
+
+        # rename new table and overwrite old table
+        cur.execute(f"DROP TABLE IF EXISTS {tablename}")
+        rename_statement = f"ALTER TABLE {new_tablename}_rebuild RENAME TO {new_tablename}"
+        cur.execute(rename_statement)
+
+        # update the tables_register table
+        cur.execute("UPDATE tables_register SET name = ?, hidden = ? WHERE name = ?", (new_tablename, hidden, tablename))
+
+        conn.commit()
+        return redirect(f"/tables/edit/{new_tablename}")
+
+    error = ""
 
     cur.execute(f"PRAGMA table_info({tablename})")
-    columns = cur.fetchall()
+    columns_info = cur.fetchall()
 
-    return render_template("edit-table.html", tablename=tablename, columns=columns)
+    unwanted_attributes = {
+        # "unwanted_attribute": ["associated attributes"]
+        "INTEGER": [],
+        "TEXT": [],
+        "REAL": [],
+        "BLOB": [],
+        "TIMESTAMP": [],
+        "PRIMARY": ["KEY"],
+        "NOT": ["NULL"],
+        "DEFAULT": ["CURRENT_TIMESTAMP"],
+    }
+
+    # Get the CREATE TABLE statement
+    cur.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{tablename}'")
+    create_table_statement = cur.fetchone()[0]
+    columns = create_table_statement.split("(")[1].split(")")[0].split(",")
+    for column in columns:
+        pop_list = []
+        if column[0] == " ":
+            column = column[1:]
+        attributes = column.split(" ")
+        for key, attribute in enumerate(attributes):
+            if attribute in unwanted_attributes:
+                for key_2, unwanted in enumerate(unwanted_attributes[attribute]):
+                    if unwanted == attributes[key + 1 + key_2]:
+                        if key + 1 + key_2 not in pop_list:
+                            pop_list.append(key + 1 + key_2)
+                pop_list.append(key)
+        pop_list.sort(reverse=True)
+        for key in pop_list:
+            attributes.pop(key)
+        if len(attributes) <= 1:
+            attributes.append("")
+        attributes_str = ""
+        for attribute in attributes[1:]:
+            attributes_str += f"{attribute} "
+        for column_info in columns_info:
+            info = list(column_info)
+            if info[1] == attributes[0]:
+                info.append(attributes_str.strip())
+            columns_info[columns_info.index(column_info)] = tuple(info)
+
+    cur.execute(f"SELECT COUNT(*) FROM {tablename}")
+    row_count = cur.fetchone()[0]
+
+    hidden = False
+
+    return render_template("edit-table.html", tablename=tablename, columns=columns_info, rowcount=row_count, hidden=hidden, error=error)
 
 
 @app.route("/table/<tablename>", methods=["GET", "POST"])
-def table(tablename):
+def view_table(tablename):
     show = True
     message = ""
     data = ""
@@ -210,7 +357,7 @@ def table(tablename):
 
 
 @app.route("/query", methods=["GET", "POST"])
-def query():
+def raw_query():
     message = ""
     data = ""
 
@@ -286,13 +433,11 @@ def create_table():
         else:
             return jsonify({"result": "success", "data": f"table {data['tablename']} added to database"})
 
-VALID_API_KEY = "abc"
-
 
 @app.route("/post/new/portfolio-config", methods=['POST'])
 def create_portfolio():
     api_key = request.headers.get('x-api-key')
-    if api_key != VALID_API_KEY:
+    if api_key != API_KEY:
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
 
     data = request.get_json()
@@ -331,7 +476,7 @@ def create_portfolio():
 @app.route("/get/portfolio-config", methods=['POST'])
 def get_portfolio():
     api_key = request.headers.get('x-api-key')
-    if api_key != VALID_API_KEY:
+    if api_key != API_KEY:
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
     data = {
         "pagename": "",
@@ -349,17 +494,17 @@ def get_portfolio():
     try:
         request_data = request.get_json()
         if request_data is not None:
-            id = request_data.get("id")
+            row_id = request_data.get("id")
         else:
-            id = request.headers.get("id")
+            row_id = request.headers.get("id")
     except Exception as e:
         return str(e)
 
     try:
-        if id:
-            if str(id).isdigit():
-                id = int(id)
-                query = f"SELECT pagename, title, bio, links, banners, segments, icon, favicon, colours FROM portfolio WHERE id = {id}"
+        if row_id:
+            if str(row_id).isdigit():
+                row_id = int(row_id)
+                query = f"SELECT pagename, title, bio, links, banners, segments, icon, favicon, colours FROM portfolio WHERE id = {row_id}"
             else:
                 return jsonify({"result": "failed", "error": "invalid type for id"}), 500
         else:
@@ -388,7 +533,7 @@ def get_portfolio():
 @app.route("/post/new/portfolio-segment", methods=["POST"])
 def create_segment():
     api_key = request.headers.get('x-api-key')
-    if api_key != VALID_API_KEY:
+    if api_key != API_KEY:
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
 
     data = request.get_json()
@@ -424,7 +569,7 @@ def create_segment():
 @app.route("/get/portfolio-segment", methods=['POST'])
 def get_portfolio_segment():
     api_key = request.headers.get('x-api-key')
-    if api_key != VALID_API_KEY:
+    if api_key != API_KEY:
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
     data = {
         "name": "",
@@ -439,19 +584,19 @@ def get_portfolio_segment():
     try:
         request_data = request.get_json()
         if request_data is not None:
-            id = request_data.get("id")
+            row_id = request_data.get("id")
         else:
-            id = request.headers.get("id")
+            row_id = request.headers.get("id")
     except Exception as e:
         return str(e)
 
-    if id == None:
+    if row_id is None:
         return jsonify({"result": "failed", "error": "id not given"}), 500
 
     try:
-        if str(id).isdigit():
-            id = int(id)
-            query = f"SELECT name, title, text, images, icon, links FROM portfolio_segments WHERE id = {id}"
+        if str(row_id).isdigit():
+            row_id = int(row_id)
+            query = f"SELECT name, title, text, images, icon, links FROM portfolio_segments WHERE id = {row_id}"
         else:
             return jsonify({"result": "failed", "error": "invalid type for id"}), 500
     except Exception as e:
