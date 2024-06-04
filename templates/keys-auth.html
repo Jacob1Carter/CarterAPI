@@ -1,0 +1,10 @@
+<form method="POST" action="/keys">
+    {% if error != "" %}
+        <p>{{ error }}</p>
+    {% endif %}
+
+    <label for="password">Password:</label>
+    <input type="password" name="password" id="password" required>
+
+    <button type="submit">Submit</button>
+</form>

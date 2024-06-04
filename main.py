@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime
 import json
 import shutil
+import hashlib
+import random
 
 API_KEY = "i0l765RJ30f9HR47L072c2tc74V1597h"
 
@@ -84,6 +86,8 @@ def view_tables():
             all_tables.update({tablename: False})
         elif tablename == "tables_register":
             all_tables.update({tablename: False})
+        elif tablename == "keys":
+            all_tables.update({tablename: False})
         else:
             all_tables.update({tablename: True})
 
@@ -141,15 +145,12 @@ def new_table():
             conn.commit()
         except sqlite3.Error as e:
             error = f"sqlite3.Error: {str(e)}"
-            print(f"Error: {error}")
         else:
             try:
                 cur.execute("INSERT INTO tables_register (name, created_from_ip, created_from_agent, hidden) VALUES (?, ?, ?, ?)", (tablename, str(request.remote_addr), str(request.user_agent), hidden))
                 conn.commit()
-                print(f"Table {tablename} created successfully")
             except sqlite3.Error as e:
                 error = f"sqlite3.Error: {str(e)}"
-                print(f"Error: {error}")
 
         return redirect("/tables")
 
@@ -211,13 +212,9 @@ def edit_table(tablename):
         # Create the new table
         query = f"CREATE TABLE {new_tablename}_rebuild ({cols_str})"
         try:
-            print(query)
             cur.execute(query)
         except sqlite3.Error as e:
             error = f"sqlite3.Error: {str(e)}"
-            print(f"Error: {error}")
-        else:
-            print(f"Created table {new_tablename}_rebuild")
 
         # Get the column names and types of the new table
         cur.execute(f"PRAGMA table_info({new_tablename}_rebuild)")
@@ -242,7 +239,6 @@ def edit_table(tablename):
 
             # Use this SELECT statement in an INSERT INTO ... SELECT statement to insert data into the new table
             insert_statement = f"INSERT INTO {new_tablename}_rebuild ({select_columns}) SELECT {select_columns} FROM {tablename}"
-            print(insert_statement)
             cur.execute(insert_statement)
 
         # rename the columns of the new table
@@ -317,6 +313,8 @@ def edit_table(tablename):
 
 @app.route("/table/<tablename>", methods=["GET", "POST"])
 def view_table(tablename):
+    if tablename == "keys":
+        return "Access Denied"
     show = True
     message = ""
     data = ""
@@ -362,12 +360,17 @@ def raw_query():
     data = ""
 
     if request.method == "POST":
+        password = request.form.get("password")
         user_query = request.form.get("query")
-        try:
-            cur.execute(user_query)
-            data = cur.fetchall()
-        except sqlite3.Error as e:
-            message = f"Error: {str(e)}"
+        if verify_password(password):
+            try:
+                cur.execute(user_query)
+                data = cur.fetchall()
+                message = "Query Successful"
+            except sqlite3.Error as e:
+                message = f"Error: {str(e)}"
+        else:
+            message = "Incorrect Password, attempt logged"
 
     return render_template("query.html", message=message, data=data)
 
@@ -381,7 +384,6 @@ def reset_database():
         for table in tables:
             table_name = table[0]
             cur.execute(f"DROP TABLE IF EXISTS {table_name};")
-            print(f"Dropped table: {table_name}")
 
         cur.execute("CREATE TABLE tables_register (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_from_ip TEXT NOT NULL, created_from_agent TEXT NOT NULL, hidden BOOL NOT NULL DEFAULT 0, date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
 
@@ -434,10 +436,55 @@ def create_table():
             return jsonify({"result": "success", "data": f"table {data['tablename']} added to database"})
 
 
+@app.route("/keys", methods=["GET", "POST"])
+def manage_keys():
+    if request.method == "POST":
+        if request.form.get("name"):
+            name = request.form.get("name")
+            valid_key = False
+            key = False
+            while not valid_key:
+                key = generate_key()
+                cur.execute("SELECT id FROM keys WHERE key_md5 = ?", (md5_hash(key),))
+                if not cur.fetchone():
+                    valid_key = True
+
+            if key:
+                cur.execute("INSERT INTO keys (name, key_md5) VALUES (?, ?)", (name, md5_hash(key)))
+                conn.commit()
+                return f"{key}<br><br>Key added to database.<br>Please save this key as it will not be shown again."
+
+        if request.form.get("action"):
+            action, name = request.form.get("action").split("-")
+            if action == "d":
+                cur.execute("DELETE FROM keys WHERE name = ?", (name,))
+            if action == "s":
+                cur.execute("SELECT suspended FROM keys WHERE name = ?", (name,))
+                suspended = cur.fetchone()[0]
+                if suspended == 1:
+                    cur.execute("UPDATE keys SET suspended = 0 WHERE name = ?", (name,))
+                else:
+                    cur.execute("UPDATE keys SET suspended = 1 WHERE name = ?", (name,))
+            conn.commit()
+
+            cur.execute("SELECT name, suspended FROM keys WHERE id != 1")
+            keys = cur.fetchall()
+
+            return render_template("keys.html", keys=keys)
+        if verify_password(request.form.get("password")):
+            cur.execute("SELECT name, suspended FROM keys WHERE id != 1")
+            keys = cur.fetchall()
+            return render_template("keys.html", keys=keys)
+        else:
+            return render_template("keys-auth.html", error="Incorrect Password")
+    else:
+        return render_template("keys-auth.html", error="")
+
+
 @app.route("/post/new/portfolio-config", methods=['POST'])
 def create_portfolio():
     api_key = request.headers.get('x-api-key')
-    if api_key != API_KEY:
+    if not verify_key(api_key):
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
 
     data = request.get_json()
@@ -476,7 +523,7 @@ def create_portfolio():
 @app.route("/get/portfolio-config", methods=['POST'])
 def get_portfolio():
     api_key = request.headers.get('x-api-key')
-    if api_key != API_KEY:
+    if not verify_key(api_key):
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
     data = {
         "pagename": "",
@@ -533,7 +580,7 @@ def get_portfolio():
 @app.route("/post/new/portfolio-segment", methods=["POST"])
 def create_segment():
     api_key = request.headers.get('x-api-key')
-    if api_key != API_KEY:
+    if not verify_key(api_key):
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
 
     data = request.get_json()
@@ -569,7 +616,7 @@ def create_segment():
 @app.route("/get/portfolio-segment", methods=['POST'])
 def get_portfolio_segment():
     api_key = request.headers.get('x-api-key')
-    if api_key != API_KEY:
+    if not verify_key(api_key):
         return jsonify({"result": "failed", "error": "Unauthorized"}), 401
     data = {
         "name": "",
@@ -618,6 +665,68 @@ def get_portfolio_segment():
             return jsonify({"result": "failed", "error": "No data found"}), 404
 
     return jsonify({"result": "success", "data": data}), 200
+
+
+def md5_hash(string):
+    return hashlib.md5(string.encode()).hexdigest()
+
+
+def generate_key():
+
+    choice_alpha = [
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+    ]
+
+    choices_num = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+    ]
+
+    string = ""
+
+    for i in range(1, 33):
+        if random.random() < 0.4:
+            string += random.choice(choice_alpha)
+        else:
+            string += str(random.choice(choices_num))
+
+    return string
+
+
+def verify_password(password):
+    cur.execute("SELECT key_md5 FROM keys WHERE id = 1")
+    password_md5 = cur.fetchone()[0]
+    if md5_hash(password) == password_md5:
+        log_attempt("admin password", True)
+        return True
+    else:
+        log_attempt("admin password", False)
+        return False
+
+
+def verify_key(key):
+    cur.execute("SELECT name FROM keys WHERE key_md5 = ?", (md5_hash(key),))
+    name = cur.fetchone()
+    if name:
+        if name[0] == "admin password":
+            log_attempt("unknown", False)
+            return False
+        else:
+            log_attempt(name[0], True)
+            return True
+    else:
+        log_attempt(name[0], False)
+        return False
+
+
+def log_attempt(name, passed):
+    ip = request.remote_addr
+    if name == "admin password":
+        attempt_type = "password"
+    else:
+        attempt_type = request.url
+    detail = f"Passed: {passed}"
+    cur.execute("INSERT INTO key_logs (key_name, from_ip, type, detail) VALUES (?, ?, ?, ?)", (name, ip, attempt_type, detail))
+    conn.commit()
 
 
 def check_db_backup():

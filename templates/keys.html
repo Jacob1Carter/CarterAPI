@@ -1,0 +1,28 @@
+<h1>Keys</h1>
+
+<form action="/keys" method="POST">
+    <label for="name">Name:</label>
+    <input type="text" name="name" id="name" required>
+
+    <button type="submit">Create</button>
+</form>
+
+<form action="/keys" method="POST">
+    <table>
+        {% for key in keys %}
+            <tr>
+                <td style="padding: 5px; border: 1px solid #000">{{ key[0] }}</td>
+                <td style="padding: 5px; border: 1px solid #000">{% if key[1] == 1 %}Suspended{% else %}Active{% endif %}</td>
+                <td style="padding: 5px; border: 1px solid #000"><button name="action" value="s-{{ key[0] }}">{% if key[1] == 1 %}Activate{% else %}Suspend{% endif %}</button></td>
+                <td style="padding: 5px; border: 1px solid #000"><button name="action" value="d-{{ key[0] }}" onclick="return confirmDelete('{{ key[0] }}', 'delete')">Delete</button></td>
+            </tr>
+        {% endfor %}
+    </table>
+</form>
+
+
+<script>
+function confirmDelete(key, action) {
+    return confirm(`Are you sure you want to ${action} the key "${key}"?`);
+}
+</script>
