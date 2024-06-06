@@ -1,4 +1,4 @@
-<form method="POST" action="/table/{{ table }}">
+<form method="POST" action="/table/{{ table }}" autocomplete="off">
     <span>
         SELECT
         <input type="text" name="selection" value="{{ selection }}">
@@ -19,7 +19,27 @@
 {{ message }}
 {% endif %}
 
-{% if show %}
+<style>
+    .hidden-row {
+        display: none;
+    }
+</style>
+
+{% if show %}<br>
+<label for="rowsPerPage">Rows per page:</label>
+<select id="rowsPerPage">
+    <option value="10">10</option>
+    <option value="20">20</option>
+    <option value="30" selected>30</option>
+    <option value="50">50</option>
+    <option value="75">75</option>
+    <option value="100">100</option>
+    <option value="all">all</option>
+</select>
+<br>
+<button onclick="previousPage()">Previous</button>
+<button onclick="nextPage()">Next</button>
+<br>
 <table>
     <tr>
         {% for column_name in column_names %}
@@ -35,6 +55,50 @@
     {% endfor %}
 </table>
 {% endif %}
+
+<script>
+    var currentPage = 1;
+    var rowsPerPage = document.getElementById('rowsPerPage').value;
+
+    document.getElementById('rowsPerPage').addEventListener('change', function() {
+        rowsPerPage = this.value;
+        currentPage = 1;  // Reset to first page
+        updateTable();
+    });
+
+    function updateTable() {
+        var table = document.querySelector('table');
+        var rows = table.querySelectorAll('tr:not(:first-child)');  // Exclude the header row
+
+        // Add or remove the 'hidden-row' class as necessary
+        rows.forEach(function(row, index) {
+            if (rowsPerPage === 'all') {
+                row.classList.remove('hidden-row');
+            } else {
+                if (index < (currentPage - 1) * rowsPerPage || index >= currentPage * rowsPerPage) {
+                    row.classList.add('hidden-row');
+                } else {
+                    row.classList.remove('hidden-row');
+                }
+            }
+        });
+    }
+
+    function nextPage() {
+        currentPage++;
+        updateTable();
+    }
+
+    function previousPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            updateTable();
+        }
+    }
+
+    // Initialize the table
+    updateTable();
+</script>
 
 <a href="/tables">all tables</a>
 <br>

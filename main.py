@@ -325,7 +325,7 @@ def view_table(tablename):
 
     selection = "*"
     table = tablename
-    other = ""
+    other = "ORDER BY id DESC"
 
     if request.method == "POST":
         selection = request.form.get("selection")
@@ -665,6 +665,67 @@ def get_portfolio_segment():
             return jsonify({"result": "failed", "error": "No data found"}), 404
 
     return jsonify({"result": "success", "data": data}), 200
+
+
+@app.route("/get/jiujitsu-user-exists")
+def check_jiujitsu_user():
+    api_key = request.headers.get('x-api-key')
+    if not verify_key(api_key):
+        return jsonify({"result": "failed", "error": "Unauthorized"}), 401
+
+    try:
+        request_data = request.get_json()
+        if request_data is not None:
+            username = request_data.get("username")
+            email = request_data.get("email")
+        else:
+            username = request.headers.get("username")
+            email = request.headers.get("email")
+    except Exception as e:
+        return str(e)
+
+    if username is None or email is None:
+        return jsonify({"result": "failed", "error": "username and/or email not given"}), 500
+    else:
+        cur.execute("SELECT username, email FROM SMRJJ_users WHERE username = ? OR email = ?", (username, email))
+        result = cur.fetchone()
+        if result:
+            return jsonify({"result": "success", "data": 1}), 200
+        else:
+            return jsonify({"result": "success", "data": 0}), 200
+
+
+@app.route("/post/new-jiujitsu-user")
+def create_jiujitsu_user():
+    api_key = request.headers.get('x-api-key')
+    if not verify_key(api_key):
+        return jsonify({"result": "failed", "error": "Unauthorized"}), 401
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"result": "failed", "error": "No data provided"}), 400
+
+    required_fields = ["username", "password", "email"]
+
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"result": "failed", "error": f"{field} value not given"}), 400
+
+    query = "INSERT INTO SMRJJ_users (username, password, email) VALUES (?, ?, ?)"
+    values = (
+        data["username"],
+        data["password"],
+        data["email"]
+    )
+
+    try:
+        cur.execute(query, values)
+        conn.commit()
+    except sqlite3.Error as e:
+        return jsonify({"result": "failed", "error": str(e)}), 500
+    else:
+        return jsonify({"result": "success", "data": "data added to SMRJJ_users table"}), 200
 
 
 def md5_hash(string):

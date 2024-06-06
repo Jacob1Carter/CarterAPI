@@ -1,13 +1,13 @@
 <h1>Keys</h1>
 
-<form action="/keys" method="POST">
+<form action="/keys" method="POST" autocomplete="off">
     <label for="name">Name:</label>
     <input type="text" name="name" id="name" required>
 
     <button type="submit">Create</button>
 </form>
 
-<form action="/keys" method="POST">
+<form action="/keys" method="POST" autocomplete="off">
     <table>
         {% for key in keys %}
             <tr>

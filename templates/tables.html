@@ -4,7 +4,7 @@
     <p>{{ error }}</p>
 {% endif %}
 
-<form method="POST" action="/tables">
+<form method="POST" action="/tables" autocomplete="off">
     <a href="/tables/new">New table</a>
     <ul style="display: flex; flex-direction: row; flex-wrap: wrap; max-width: 1700px; list-style-type: none;">
         {% for table in all_tables %}

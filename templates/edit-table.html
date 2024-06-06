@@ -3,7 +3,7 @@
     <p>{{ error }}</p>
 {% endif %}
 
-<form method="POST" action="/tables/edit/{{ tablename }}">
+<form method="POST" action="/tables/edit/{{ tablename }}" autocomplete="off">
     <h1>Edit '{{ tablename }}' table:</h1>
     <a href="/table/{{ tablename }}">View table</a>
     <div class="form-group">
